@@ -9,7 +9,8 @@ Namespace RichEditConvertStaticUrlsToHyperlinks
     Partial Public Class Form1
         Inherits Form
 
-        Private Shared urlRegex As New Regex("((?:[a-z][\w-]+:(?:/{1,3}|[a-z0-9%])|www\d{0,3}[.]|ftp[.]|[a-z0-9.\-]+[.][a-z]{2,4}/)(?:[^\s()<>]+|\(([^\s()<>]+|(\([^\s()<>]+\)))*\))+(?:\(([^\s()<>]+|(\([^\s()<>]+\)))*\)|[^\s`!()\[\]{};:'"".,<>?«»“”‘’]))", RegexOptions.IgnoreCase)
+        Private Shared urlRegex As New Regex("((?:[a-z][\w-]+:(?:/{1,3}|[a-z0-9%])|www\d{0,3}[.]|ftp[.]|[a-z0-9.\-]+[.][a-z]{2,4}/)(?:[^\s()<>]+|\(([^\s()<>]+|(\([^\s()<>]+\)))*\))+(?:\(([^\s()<>]+|(\([^\s()<>]+\)))*\)|[^\s`!()\[\]{};:'"".,<>?«»“”‘’]))",
+                                             RegexOptions.IgnoreCase, TimeSpan.FromMilliseconds(250))
 
         Public Sub New()
             InitializeComponent()
@@ -24,24 +25,39 @@ Namespace RichEditConvertStaticUrlsToHyperlinks
             CreateHyperlinks()
         End Sub
 
+        Private Sub CreateHyperlink(ByVal range As DocumentRange)
+            If RangeHasHyperlink(range) Then
+                Return
+            End If
+
+            Dim doc As Document = richEditControl1.Document
+            Dim hyperlink As Hyperlink = doc.Hyperlinks.Create(range)
+            hyperlink.NavigateUri = doc.GetText(hyperlink.Range)
+        End Sub
+        Private Function IsValidUri(ByVal result As IRegexSearchResult) As Boolean
+            Try
+                Return result.FindNext()
+            Catch e1 As RegexMatchTimeoutException
+                Return False
+            End Try
+        End Function
         Private Sub CreateHyperlinks()
             Dim doc As Document = richEditControl1.Document
 
             doc.BeginUpdate()
-
-            Dim urls() As DocumentRange = richEditControl1.Document.FindAll(urlRegex)
-
-            For i As Integer = urls.Length - 1 To 0 Step -1
-                If RangeHasHyperlink(urls(i)) Then
-                    Continue For
+            Dim result As IRegexSearchResult
+            result = doc.StartSearch(urlRegex)
+            Do While IsValidUri(result)
+                Dim wordRange As DocumentRange = result.CurrentResult
+                If (Not RangeHasHyperlink(wordRange)) Then
+                    CreateHyperlink(wordRange)
                 End If
-
-                Dim hyperlink As Hyperlink = doc.Hyperlinks.Create(urls(i))
-                hyperlink.NavigateUri = doc.GetText(hyperlink.Range)
-            Next i
+            Loop
 
             doc.EndUpdate()
         End Sub
+
+
 
         Private Function RangeHasHyperlink(ByVal documentRange As DocumentRange) As Boolean
             For Each h As Hyperlink In richEditControl1.Document.Hyperlinks
